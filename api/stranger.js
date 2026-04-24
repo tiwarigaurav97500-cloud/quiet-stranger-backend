@@ -16,9 +16,7 @@ function setCors(res, origin){
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 }
 
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-}
+  
 
 function cleanText(value, maxLength = 1200){
   if(typeof value !== "string") return "";
