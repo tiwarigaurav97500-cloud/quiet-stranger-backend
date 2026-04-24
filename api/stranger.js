@@ -101,8 +101,12 @@ Privacy:
     });
 
   } catch(error){
-    return res.status(500).json({
-      error: "AI reply failed"
-    });
-  }
+  console.error("OPENAI_ERROR:", error);
+
+  return res.status(500).json({
+    error: "AI reply failed",
+    message: error?.message || "Unknown error",
+    status: error?.status || null,
+    code: error?.code || null
+  });
 }
