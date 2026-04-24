@@ -1,7 +1,3 @@
 {
-  "functions": {
-    "api/stranger.js": {
-      "maxDuration": 30
-    }
-  }
+  "version": 2
 }
