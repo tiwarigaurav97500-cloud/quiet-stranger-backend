@@ -1,9 +1,3 @@
-import OpenAI from "openai";
-
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
-
 function setCors(res){
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -15,6 +9,24 @@ function cleanText(value, maxLength = 1200){
   return value.trim().slice(0, maxLength);
 }
 
+function buildGeminiContext(context){
+  if(!Array.isArray(context)) return [];
+
+  return context.slice(-8)
+    .map(item => {
+      const role = item.role === "assistant" ? "model" : "user";
+      const content = cleanText(item.content, 800);
+
+      if(!content) return null;
+
+      return {
+        role,
+        parts: [{ text: content }]
+      };
+    })
+    .filter(Boolean);
+}
+
 export default async function handler(req, res){
   setCors(res);
 
@@ -24,7 +36,7 @@ export default async function handler(req, res){
 
   if(req.method === "GET"){
     return res.status(200).json({
-      message: "Backend is working. Use POST for AI replies."
+      message: "Gemini backend is working. Use POST for AI replies."
     });
   }
 
@@ -35,9 +47,9 @@ export default async function handler(req, res){
   }
 
   try{
-    if(!process.env.OPENAI_API_KEY){
+    if(!process.env.GEMINI_API_KEY){
       return res.status(500).json({
-        error: "Missing OPENAI_API_KEY in Vercel Environment Variables"
+        error: "Missing GEMINI_API_KEY in Vercel Environment Variables"
       });
     }
 
@@ -46,13 +58,7 @@ export default async function handler(req, res){
     const message = cleanText(body.message, 1500);
     const mode = cleanText(body.mode, 50) || "listen";
     const language = cleanText(body.language, 50) || "auto";
-
-    const context = Array.isArray(body.context)
-      ? body.context.slice(-8).map(x => ({
-          role: x.role === "assistant" ? "assistant" : "user",
-          content: cleanText(x.content, 800)
-        })).filter(x => x.content)
-      : [];
+    const context = buildGeminiContext(body.context);
 
     if(!message){
       return res.status(400).json({
@@ -80,6 +86,7 @@ Your job:
 - If user says they are unsafe, suicidal, or might harm themselves, tell them to contact emergency help or a trusted person immediately.
 
 Current selected mode: ${mode}
+User language style: ${language}
 
 Mode rules:
 - listen: mostly listen, reflect, do not give too much advice.
@@ -93,33 +100,64 @@ Privacy:
 - Do not claim to store memory beyond the current chat context.
 `;
 
-    const messages = [
-      { role: "system", content: systemPrompt },
+    const contents = [
+      {
+        role: "user",
+        parts: [{ text: systemPrompt }]
+      },
+      {
+        role: "model",
+        parts: [{ text: "Understood. I will reply as A Quiet Stranger." }]
+      },
       ...context,
-      { role: "user", content: message }
+      {
+        role: "user",
+        parts: [{ text: message }]
+      }
     ];
 
-    const completion = await client.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages,
-      temperature: 0.9,
-      max_tokens: 300
-    });
+    const geminiResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          contents,
+          generationConfig: {
+            temperature: 0.9,
+            maxOutputTokens: 320
+          }
+        })
+      }
+    );
 
-    const reply = completion.choices?.[0]?.message?.content?.trim();
+    const data = await geminiResponse.json();
+
+    if(!geminiResponse.ok){
+      return res.status(geminiResponse.status).json({
+        error: "Gemini API failed",
+        message: data?.error?.message || "Unknown Gemini error",
+        status: geminiResponse.status,
+        code: data?.error?.status || null
+      });
+    }
+
+    const reply =
+      data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim()
+      || "I’m here. Tell me a little more.";
 
     return res.status(200).json({
-      reply: reply || "I’m here. Tell me a little more."
+      reply
     });
 
   } catch(error){
-    console.error("OPENAI_ERROR:", error);
+    console.error("GEMINI_BACKEND_ERROR:", error);
 
     return res.status(500).json({
-      error: "AI reply failed",
-      message: error?.message || "Unknown error",
-      status: error?.status || null,
-      code: error?.code || null
+      error: "Gemini backend failed",
+      message: error?.message || "Unknown error"
     });
   }
 }
