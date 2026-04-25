@@ -1,7 +1,7 @@
 function setCors(res){
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Allow-Headers", "*");
 }
 
 function cleanText(value, maxLength = 1200){
@@ -53,7 +53,15 @@ export default async function handler(req, res){
       });
     }
 
-    const body = req.body || {};
+    let body = req.body || {};
+
+    if(typeof body === "string"){
+      try{
+        body = JSON.parse(body || "{}");
+      } catch(e){
+        body = {};
+      }
+    }
 
     const message = cleanText(body.message, 1500);
     const mode = cleanText(body.mode, 50) || "listen";
@@ -83,7 +91,6 @@ Your job:
 - Ask at most one gentle question.
 - Keep replies warm, human, varied, and non-repetitive.
 - If user asks "kya karu" or "what should I do", give small practical steps.
-- If user says they are unsafe, suicidal, or might harm themselves, tell them to contact emergency help or a trusted person immediately.
 
 Current selected mode: ${mode}
 User language style: ${language}
@@ -94,6 +101,9 @@ Mode rules:
 - calm: slow down panic/overthinking with grounding/breathing.
 - advice: give small practical next steps, not big lectures.
 - name: help name the feeling clearly.
+
+Safety:
+If user says they are unsafe, suicidal, or might harm themselves, tell them to contact emergency help or a trusted person immediately.
 
 Privacy:
 - Do not ask for real name, phone, address, exact location, password, or private identity.
@@ -117,7 +127,7 @@ Privacy:
     ];
 
     const geminiResponse = await fetch(
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: {
@@ -127,7 +137,7 @@ Privacy:
           contents,
           generationConfig: {
             temperature: 0.9,
-            maxOutputTokens: 320
+            maxOutputTokens: 350
           }
         })
       }
